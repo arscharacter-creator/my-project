@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
+import { redis } from '../redis.js';
 
 const ACCESS_TTL_SEC = 15 * 60;
-const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-const refreshStore = new Map();
+const REFRESH_TTL_SEC = 30 * 24 * 60 * 60;
+const key = (token) => `refresh:${token}`;
 
 function userId(profile) {
   return profile?.sub || profile?.id || profile?.email || 'anonymous';
@@ -18,30 +18,26 @@ export function issueAccessToken(profile) {
   );
 }
 
-export function issueRefreshToken(profile) {
+export async function issueRefreshToken(profile) {
   const token = crypto.randomBytes(32).toString('base64url');
-  refreshStore.set(token, {
-    profile,
-    expiresAt: Date.now() + REFRESH_TTL_MS,
-  });
+  await redis.set(key(token), JSON.stringify({ profile }), { EX: REFRESH_TTL_SEC });
   return token;
 }
 
-export function rotateRefresh(oldToken) {
-  const record = refreshStore.get(oldToken);
-  if (!record) return null;
+// GETDEL is atomic (Redis 6.2+); prevents refresh-token replay races.
+export async function rotateRefresh(oldToken) {
+  const raw = await redis.getDel(key(oldToken));
+  if (!raw) return null;
 
-  refreshStore.delete(oldToken);
-  if (record.expiresAt < Date.now()) return null;
-
+  const { profile } = JSON.parse(raw);
   return {
-    access: issueAccessToken(record.profile),
-    refresh: issueRefreshToken(record.profile),
+    access: issueAccessToken(profile),
+    refresh: await issueRefreshToken(profile),
   };
 }
 
-export function revokeRefresh(token) {
-  refreshStore.delete(token);
+export async function revokeRefresh(token) {
+  await redis.del(key(token));
 }
 
 export function verifyAccess(token) {

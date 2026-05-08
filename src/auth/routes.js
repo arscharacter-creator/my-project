@@ -22,30 +22,42 @@ router.get('/login', passport.authenticate('oauth2'));
 router.get(
   '/callback',
   passport.authenticate('oauth2', { session: false, failureRedirect: '/auth/failure' }),
-  (req, res) => {
-    const access = issueAccessToken(req.user);
-    const refresh = issueRefreshToken(req.user);
-    res.cookie('refresh_token', refresh, refreshCookieOpts);
-    res.json({ access_token: access, token_type: 'Bearer', expires_in: 15 * 60 });
+  async (req, res, next) => {
+    try {
+      const access = issueAccessToken(req.user);
+      const refresh = await issueRefreshToken(req.user);
+      res.cookie('refresh_token', refresh, refreshCookieOpts);
+      res.json({ access_token: access, token_type: 'Bearer', expires_in: 15 * 60 });
+    } catch (err) {
+      next(err);
+    }
   }
 );
 
-router.post('/refresh', (req, res) => {
-  const refresh = req.cookies?.refresh_token || req.body?.refresh_token;
-  if (!refresh) return res.status(401).json({ error: 'missing_refresh_token' });
+router.post('/refresh', async (req, res, next) => {
+  try {
+    const refresh = req.cookies?.refresh_token || req.body?.refresh_token;
+    if (!refresh) return res.status(401).json({ error: 'missing_refresh_token' });
 
-  const result = rotateRefresh(refresh);
-  if (!result) return res.status(401).json({ error: 'invalid_refresh_token' });
+    const result = await rotateRefresh(refresh);
+    if (!result) return res.status(401).json({ error: 'invalid_refresh_token' });
 
-  res.cookie('refresh_token', result.refresh, refreshCookieOpts);
-  res.json({ access_token: result.access, token_type: 'Bearer', expires_in: 15 * 60 });
+    res.cookie('refresh_token', result.refresh, refreshCookieOpts);
+    res.json({ access_token: result.access, token_type: 'Bearer', expires_in: 15 * 60 });
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.post('/logout', (req, res) => {
-  const refresh = req.cookies?.refresh_token;
-  if (refresh) revokeRefresh(refresh);
-  res.clearCookie('refresh_token', { path: '/auth' });
-  res.json({ ok: true });
+router.post('/logout', async (req, res, next) => {
+  try {
+    const refresh = req.cookies?.refresh_token;
+    if (refresh) await revokeRefresh(refresh);
+    res.clearCookie('refresh_token', { path: '/auth' });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/failure', (_req, res) => res.status(401).json({ error: 'oauth_failed' }));
