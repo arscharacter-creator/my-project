@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Ruflo / claude-flow runtime state
+.swarm/
+.swarm-backup-*/
+.claude-flow/logs/
+.claude-flow/sessions/
+.claude-flow/data/
+.claude-flow/metrics/
+.claude-flow/security/
+.claude-flow/swarm/
+.claude-flow/tasks/
+.claude-flow/agents/store.json
+.claude-flow/daemon.pid
+.claude-flow/daemon-state.json
+.claude/memory.db
+
+# Databases / vector indexes
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+hnsw.index
+hnsw.metadata.json
+
+# Logs
+*.log
+
+# Build output
+dist/
+build/
+out/
+
+# OS
+Thumbs.db
+.DS_Store
