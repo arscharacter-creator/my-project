@@ -5,6 +5,7 @@ node_modules/
 .env
 .env.local
 .env.*.local
+!.env.example
 
 # Ruflo / claude-flow runtime state
 .swarm/
