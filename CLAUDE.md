@@ -1,175 +1,80 @@
-# Ruflo — Claude Code Configuration
+# CLAUDE.md
 
-## Rules
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-- Do what has been asked; nothing more, nothing less
-- NEVER create files unless absolutely necessary — prefer editing existing files
-- NEVER create documentation files unless explicitly requested
-- NEVER save working files or tests to root — use `/src`, `/tests`, `/docs`, `/config`, `/scripts`
-- ALWAYS read a file before editing it
-- NEVER commit secrets, credentials, or .env files
-- Keep files under 500 lines
-- Validate input at system boundaries
-
-## Agent Comms (SendMessage-First Coordination)
-
-Named agents coordinate via `SendMessage`, not polling or shared state.
-
-```
-Lead (you) ←→ architect ←→ developer ←→ tester ←→ reviewer
-              (named agents message each other directly)
-```
-
-### Spawning a Coordinated Team
-
-```javascript
-// ALL agents in ONE message, each knows WHO to message next
-Agent({ prompt: "Research the codebase. SendMessage findings to 'architect'.",
-  subagent_type: "researcher", name: "researcher", run_in_background: true })
-Agent({ prompt: "Wait for 'researcher'. Design solution. SendMessage to 'coder'.",
-  subagent_type: "system-architect", name: "architect", run_in_background: true })
-Agent({ prompt: "Wait for 'architect'. Implement it. SendMessage to 'tester'.",
-  subagent_type: "coder", name: "coder", run_in_background: true })
-Agent({ prompt: "Wait for 'coder'. Write tests. SendMessage results to 'reviewer'.",
-  subagent_type: "tester", name: "tester", run_in_background: true })
-Agent({ prompt: "Wait for 'tester'. Review code quality and security.",
-  subagent_type: "reviewer", name: "reviewer", run_in_background: true })
-
-// Kick off the pipeline
-SendMessage({ to: "researcher", summary: "Start", message: "[task context]" })
-```
-
-### Patterns
-
-| Pattern | Flow | Use When |
-|---------|------|----------|
-| **Pipeline** | A → B → C → D | Sequential dependencies (feature dev) |
-| **Fan-out** | Lead → A, B, C → Lead | Independent parallel work (research) |
-| **Supervisor** | Lead ↔ workers | Ongoing coordination (complex refactor) |
-
-### Rules
-
-- ALWAYS name agents — `name: "role"` makes them addressable
-- ALWAYS include comms instructions in prompts — who to message, what to send
-- Spawn ALL agents in ONE message with `run_in_background: true`
-- After spawning: STOP, tell user what's running, wait for results
-- NEVER poll status — agents message back or complete automatically
-
-## Swarm & Routing
-
-### Config
-- **Topology**: hierarchical-mesh (anti-drift)
-- **Max Agents**: 15
-- **Memory**: hybrid
-- **HNSW**: Enabled
-- **Neural**: Enabled
+## Commands
 
 ```bash
-npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --strategy specialized
+npm run dev    # node --watch src/server.js
+npm start      # node src/server.js
+npm test       # node --test "tests/**/*.test.js"
 ```
 
-### Agent Routing
-
-| Task | Agents | Topology |
-|------|--------|----------|
-| Bug Fix | researcher, coder, tester | hierarchical |
-| Feature | architect, coder, tester, reviewer | hierarchical |
-| Refactor | architect, coder, reviewer | hierarchical |
-| Performance | perf-engineer, coder | hierarchical |
-| Security | security-architect, auditor | hierarchical |
-
-### When to Swarm
-- **YES**: 3+ files, new features, cross-module refactoring, API changes, security, performance
-- **NO**: single file edits, 1-2 line fixes, docs updates, config changes, questions
-
-### 3-Tier Model Routing
-
-| Tier | Handler | Use Cases |
-|------|---------|-----------|
-| 1 | Agent Booster (WASM) | Simple transforms — skip LLM, use Edit directly |
-| 2 | Haiku | Simple tasks, low complexity |
-| 3 | Sonnet/Opus | Architecture, security, complex reasoning |
-
-## Memory & Learning
-
-### Before Any Task
-```bash
-npx @claude-flow/cli@latest memory search --query "[task keywords]" --namespace patterns
-npx @claude-flow/cli@latest hooks route --task "[task description]"
-```
-
-### After Success
-```bash
-npx @claude-flow/cli@latest memory store --namespace patterns --key "[name]" --value "[what worked]"
-npx @claude-flow/cli@latest hooks post-task --task-id "[id]" --success true --store-results true
-```
-
-### MCP Tools (use `ToolSearch("keyword")` to discover)
-
-| Category | Key Tools |
-|----------|-----------|
-| **Memory** | `memory_store`, `memory_search`, `memory_search_unified` |
-| **Bridge** | `memory_import_claude`, `memory_bridge_status` |
-| **Swarm** | `swarm_init`, `swarm_status`, `swarm_health` |
-| **Agents** | `agent_spawn`, `agent_list`, `agent_status` |
-| **Hooks** | `hooks_route`, `hooks_post-task`, `hooks_worker-dispatch` |
-| **Security** | `aidefence_scan`, `aidefence_is_safe`, `aidefence_has_pii` |
-| **Hive-Mind** | `hive-mind_init`, `hive-mind_consensus`, `hive-mind_spawn` |
-
-### Background Workers
-
-| Worker | When |
-|--------|------|
-| `audit` | After security changes |
-| `optimize` | After performance work |
-| `testgaps` | After adding features |
-| `map` | Every 5+ file changes |
-| `document` | After API changes |
+Run a single test by name pattern:
 
 ```bash
-npx @claude-flow/cli@latest hooks worker dispatch --trigger audit
+node --test --test-name-pattern="rotateRefresh" tests/tokens.test.js
 ```
 
-## Agents
-
-**Core**: `coder`, `reviewer`, `tester`, `planner`, `researcher`
-**Architecture**: `system-architect`, `backend-dev`, `mobile-dev`
-**Security**: `security-architect`, `security-auditor`
-**Performance**: `performance-engineer`, `perf-analyzer`
-**Coordination**: `hierarchical-coordinator`, `mesh-coordinator`, `adaptive-coordinator`
-**GitHub**: `pr-manager`, `code-review-swarm`, `issue-tracker`, `release-manager`
-
-Any string works as a custom agent type.
-
-## Build & Test
-
-- ALWAYS run tests after code changes
-- ALWAYS verify build succeeds before committing
+End-to-end refresh-token smoke test (requires a running Redis and a real `JWT_SECRET` in env):
 
 ```bash
-npm run build && npm test
+node scripts/smoke-refresh.js
 ```
 
-## CLI Quick Reference
+There is no lint/format/build step — the project ships plain ESM JavaScript and runs on Node ≥ 20.
 
-```bash
-npx @claude-flow/cli@latest init --wizard           # Setup
-npx @claude-flow/cli@latest swarm init --v3-mode     # Start swarm
-npx @claude-flow/cli@latest memory search --query "" # Vector search
-npx @claude-flow/cli@latest hooks route --task ""    # Route to agent
-npx @claude-flow/cli@latest doctor --fix             # Diagnostics
-npx @claude-flow/cli@latest security scan            # Security scan
-npx @claude-flow/cli@latest performance benchmark    # Benchmarks
+## Required environment
+
+Boot is fail-fast on missing config:
+
+- `src/server.js` exits with code 1 if `JWT_SECRET` is unset.
+- `configurePassport()` (`src/auth/passport.js`) throws if any of `OAUTH_AUTH_URL`, `OAUTH_TOKEN_URL`, `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, `OAUTH_CALLBACK_URL` is missing — this happens at startup, not on first login.
+
+`OAUTH_USERINFO_URL` is optional; without it the OAuth2 strategy returns an empty profile and downstream `userId()` falls back to `'anonymous'`.
+
+`.env.example` lists Google OAuth defaults but the strategy is provider-agnostic.
+
+## Architecture
+
+The app is a thin Express server (`src/server.js`) that wires three concerns together: OAuth2 login (passport), token issuance/rotation (JWT + Redis), and a bearer-token-protected route.
+
+### Token lifecycle
+
+1. `GET /auth/login` → passport redirects to the OAuth provider.
+2. `GET /auth/callback` → on success, issues a short-lived **access JWT** (15 min, returned in JSON body) and a long-lived **refresh token** (30 days, opaque random base64url, set as an `httpOnly` cookie scoped to `/auth`).
+3. `POST /auth/refresh` → reads the refresh token from cookie or body, atomically rotates it, returns a new access token and sets a new refresh cookie.
+4. `POST /auth/logout` → deletes the refresh token from Redis and clears the cookie. Access JWTs are stateless and remain valid until expiry.
+5. `GET /me` → requires `Authorization: Bearer <access>` (see `src/middleware/requireAuth.js`).
+
+Refresh tokens live in Redis under the key `refresh:<token>` with the user profile as JSON value and a 30-day TTL.
+
+### Atomic refresh rotation (critical invariant)
+
+`rotateRefresh()` in `src/auth/tokens.js:28` uses `redis.getDel()` to read-and-delete the old token in a single atomic op. This is what prevents refresh-token replay races — if you swap it for `get` + `del`, two concurrent refreshes can both succeed.
+
+**This requires Redis 6.2+.** The `.env.example` says so; don't downgrade.
+
+### `userId()` fallback chain
+
+`tokens.js` derives the JWT `sub` claim by trying `profile.sub → profile.id → profile.email → 'anonymous'`. Provider profiles vary (Google emits `sub`, others emit `id`), so the fallback is intentional. Tests cover all four branches.
+
+### Custom passport strategy
+
+`UserInfoStrategy` in `src/auth/passport.js` extends `passport-oauth2` solely to add a `userProfile()` implementation that fetches `OAUTH_USERINFO_URL` with the access token. The base library doesn't ship a userinfo client.
+
+## Test architecture: ESM live-binding redis injection
+
+`src/redis.js` exports a **mutable** `redis` binding plus a `setRedis(client)` function. Tests inject a fake Redis without a DI framework by relying on ES module live bindings:
+
+```js
+const { setRedis } = await import('../src/redis.js');
+setRedis(makeFakeRedis());
+const { rotateRefresh } = await import('../src/auth/tokens.js');  // imports AFTER swap
 ```
 
-26 commands, 140+ subcommands. Use `--help` on any command for details.
+The dynamic-import ordering matters: once a module captures `redis` into a local const, it would freeze the original. Because `tokens.js` does `import { redis } from '../src/redis.js'` (a live binding, not a snapshot), reassigning the export via `setRedis` is observed by the importer.
 
-## Setup
+When adding tests that touch redis: follow the same pattern in `tests/tokens.test.js` — call `setRedis()` *before* dynamically importing the module under test. A static `import` at the top of a test file runs before `setRedis()` and will bind too early in some module-graph orderings.
 
-```bash
-claude mcp add claude-flow -- npx -y @claude-flow/cli@latest
-npx @claude-flow/cli@latest daemon start
-npx @claude-flow/cli@latest doctor --fix
-```
-
-**Agent tool** handles execution (agents, files, code, git). **MCP tools** handle coordination (swarm, memory, hooks). **CLI** is the same via Bash.
+The fake redis only implements the methods the production code uses (`set`, `getDel`, `del`). If you add a new redis call in `tokens.js`, extend the fake — there's no proxy.
