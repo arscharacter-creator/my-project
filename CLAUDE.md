@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run dev    # node --watch src/server.js
 npm start      # node src/server.js
-npm test       # node --test "tests/**/*.test.js"
+npm test       # node --test tests/tokens.test.js
 ```
 
 Run a single test by name pattern:
