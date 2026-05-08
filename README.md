@@ -1,5 +1,7 @@
 # my-project
 
+[![CI](https://github.com/arscharacter-creator/my-project/actions/workflows/ci.yml/badge.svg)](https://github.com/arscharacter-creator/my-project/actions/workflows/ci.yml)
+
 Small Express API demonstrating OAuth2 login with stateless access JWTs and Redis-backed refresh tokens with atomic, replay-safe rotation.
 
 ## Requirements
