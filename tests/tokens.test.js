@@ -46,7 +46,12 @@ test('issueAccessToken falls back to id, then email, then "anonymous"', () => {
 
 test('verifyAccess rejects a tampered token', () => {
   const token = issueAccessToken({ sub: 'u1' });
-  const tampered = token.slice(0, -1) + (token.endsWith('a') ? 'b' : 'a');
+  // Flip a middle char: the last base64url char of the signature only encodes
+  // 4 bits, so swapping it can decode to the same bytes (~5% flake rate).
+  // Middle chars contribute all 6 bits, so any change is guaranteed to corrupt.
+  const i = Math.floor(token.length / 2);
+  const swap = token[i] === 'a' || token[i] === '.' ? 'b' : 'a';
+  const tampered = token.slice(0, i) + swap + token.slice(i + 1);
   assert.throws(() => verifyAccess(tampered));
 });
 
